@@ -1,0 +1,152 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Deposit and property planner</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<style>
+:root{--bg:#eef1f5;--card:#fff;--ink:#14202e;--mute:#5d6b7a;--line:#d7dde5;--inc:#2563eb;--dep:#0d9488;--prop:#14202e;--cus:#d97706;--pay:#7c3aed;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#0f1620;--card:#18222f;--ink:#e6ecf3;--mute:#93a1b2;--line:#2a3646;--inc:#60a5fa;--dep:#2dd4bf;--prop:#e6ecf3;--cus:#fbbf24;--pay:#a78bfa}}
+:root[data-theme="dark"]{--bg:#0f1620;--card:#18222f;--ink:#e6ecf3;--mute:#93a1b2;--line:#2a3646;--inc:#60a5fa;--dep:#2dd4bf;--prop:#e6ecf3;--cus:#fbbf24;--pay:#a78bfa}
+html{scroll-padding-top:env(safe-area-inset-top,0px)}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.45 "Avenir Next","Segoe UI",system-ui,sans-serif}
+main{max-width:1180px;margin:0 auto;padding:20px 16px 40px}
+h1{font-size:26px;margin:0 0 4px;letter-spacing:-.01em}
+h2{font-size:15px;margin:0 0 10px}
+p.sub{color:var(--mute);margin:0 0 18px;max-width:70ch}
+.grid{display:grid;grid-template-columns:330px 1fr;gap:16px}
+@media(max-width:860px){.grid{grid-template-columns:1fr}}
+.card{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:14px 16px;margin-bottom:14px}
+label{display:flex;justify-content:space-between;align-items:center;gap:10px;margin:7px 0;color:var(--mute);font-size:13px}
+input[type=number]{width:110px;padding:6px 8px;border:1px solid var(--line);border-radius:6px;background:var(--bg);color:var(--ink);font:inherit;text-align:right}
+input[type=range]{width:100%;accent-color:var(--dep)}
+.inc5{display:grid;grid-template-columns:repeat(5,1fr);gap:6px}
+.inc5 div{font-size:12px;color:var(--mute)}
+.inc5 input{width:100%;padding:6px 4px}
+.stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px}
+.stat{border-left:3px solid var(--dep);padding-left:10px}
+.stat b{display:block;font-size:20px;letter-spacing:-.01em}
+.stat span{font-size:12px;color:var(--mute)}
+.chartbox{position:relative;height:340px}
+.note{font-size:12px;color:var(--mute);margin:8px 0 0}
+code{font-size:12px;background:var(--bg);padding:1px 5px;border-radius:4px}
+.warn{color:#c2410c;font-weight:600}
+</style>
+</head>
+<body>
+<main>
+<h1>Made by calude at 3am one night because i wanted to model future finances... with ai...</h1>
+<a href="../contact.html">back to contact</a>
+<p class="sub">Year 0 is today. Each year your deposit grows by the compounding rate, then adds that year's savings. The bank lends your income times the lending multiple, and your deposit sits on top.</p>
+<div class="grid">
+<div>
+  <div class="card"><h2>Income</h2>
+    <div class="inc5">
+      <div>Y0<input type="number" id="i0" value="18000" step="500"></div>
+      <div>Y1<input type="number" id="i1" value="18000" step="500"></div>
+      <div>Y2<input type="number" id="i2" value="23000" step="500"></div>
+      <div>Y3<input type="number" id="i3" value="25000" step="500"></div>
+      <div>Y4<input type="number" id="i4" value="30000" step="500"></div>
+    </div>
+    <label>Growth per year after Y4 (%)<input type="number" id="gr" value="5" step="0.5"></label>
+    <label>Bank lending multiple (x income)<input type="number" id="mult" value="5" step="0.25"></label>
+  </div>
+  <div class="card"><h2>Savings and deposit</h2>
+    <label>Deposit today (£)<input type="number" id="dep0" value="30000" step="1000"></label>
+    <label>Deposit growth per year (%)<input type="number" id="dg" value="4.7" step="0.1"></label>
+    <label>Saved in full up to income of (£)<input type="number" id="thr" value="18000" step="500"></label>
+    <label>Taper above that (k)<input type="number" id="k" value="0.0005" step="0.0001"></label>
+    <p class="note">Saved per year = <code>income</code> up to the threshold, then <code>thr + (income - thr) * (1 - k * sqrt(income - thr))</code>. Savings are added using the income you earned during that year.</p>
+  </div>
+  <div class="card"><h2>Mortgage</h2>
+    <label>Interest rate (%)<input type="number" id="rate" value="5" step="0.1"></label>
+    <label>Repayment term (years)<input type="number" id="term" value="30" step="1"></label>
+    <label>Fixed property value (£), blank = maximum<input type="number" id="cust" placeholder="max" step="5000"></label>
+    <label>Years to model<input type="number" id="hor" value="15" min="5" max="40" step="1"></label>
+  </div>
+</div>
+<div>
+  <div class="card"><h2>Buy in year <span id="yv">5</span></h2>
+    <input type="range" id="yr" min="0" max="15" value="5">
+    <div class="stats" id="stats" style="margin-top:12px"></div>
+  </div>
+  <div class="card"><h2>Income, deposit and maximum property value</h2><div class="chartbox"><canvas id="c1"></canvas></div></div>
+  <div class="card"><h2>Monthly repayment by purchase year</h2><div class="chartbox"><canvas id="c2"></canvas></div>
+    <p class="note">Purple is the maximum loan in each year. Amber appears when you set a fixed property value: the loan shrinks as your deposit grows.</p></div>
+</div>
+</div>
+</main>
+<script>
+const $=id=>document.getElementById(id);
+const n=id=>{const v=parseFloat($(id).value);return isFinite(v)?v:0};
+const gbp=v=>"£"+Math.round(v).toLocaleString("en-GB");
+const css=v=>getComputedStyle(document.documentElement).getPropertyValue(v).trim();
+function saved(inc){const T=n("thr"),k=n("k");if(inc<=T)return Math.max(inc,0);const x=inc-T;return T+x*Math.max(0,1-k*Math.sqrt(x))}
+function pmt(P,rate,yrs){if(P<=0)return 0;const m=yrs*12,i=rate/1200;return i===0?P/m:P*i/(1-Math.pow(1+i,-m))}
+function model(){
+  const N=Math.max(1,Math.min(40,Math.round(n("hor")||15)));
+  const inc=[],dep=[];
+  for(let t=0;t<=N;t++)inc[t]=t<=4?n("i"+t):inc[t-1]*(1+n("gr")/100);
+  dep[0]=n("dep0");
+  for(let t=1;t<=N;t++)dep[t]=dep[t-1]*(1+n("dg")/100)+saved(inc[t-1]);
+  const cust=parseFloat($("cust").value);const hasCust=isFinite(cust)&&cust>0;
+  const rows=[];
+  for(let t=0;t<=N;t++){
+    const maxLoan=n("mult")*inc[t],maxVal=dep[t]+maxLoan;
+    const cLoan=hasCust?Math.max(0,cust-dep[t]):null;
+    rows.push({t,inc:inc[t],dep:dep[t],maxLoan,maxVal,maxPay:pmt(maxLoan,n("rate"),n("term")),cLoan,cPay:hasCust?pmt(cLoan,n("rate"),n("term")):null});
+  }
+  return{N,rows,hasCust,cust};
+}
+let c1,c2;
+function render(){
+  const{N,rows,hasCust,cust}=model();
+  const sl=$("yr");sl.max=N;if(+sl.value>N)sl.value=N;
+  const sel=+sl.value;$("yv").textContent=sel;
+  const labels=rows.map(r=>"Y"+r.t);
+  const ink=css("--mute"),line=css("--line");
+  const mk=(label,data,color,extra={})=>Object.assign({label,data,borderColor:color,backgroundColor:color,borderWidth:2.5,tension:.25,pointRadius:ctx=>ctx.dataIndex===sel?6:0,pointHoverRadius:6},extra);
+  const d1=[mk("Maximum property value",rows.map(r=>r.maxVal),css("--prop"),{borderWidth:3.5}),
+    mk("Deposit",rows.map(r=>r.dep),css("--dep")),
+    mk("Income",rows.map(r=>r.inc),css("--inc"))];
+  if(hasCust)d1.push(mk("Your fixed property value",rows.map(()=>cust),css("--cus"),{borderDash:[6,5]}));
+  const d2=[mk("Max loan repayment",rows.map(r=>r.maxPay),css("--pay"))];
+  if(hasCust)d2.push(mk("Fixed property repayment",rows.map(r=>r.cPay),css("--cus"),{borderDash:[6,5]}));
+  const opts=(fmt)=>({responsive:true,maintainAspectRatio:false,interaction:{mode:"index",intersect:false},
+    plugins:{legend:{labels:{color:ink,usePointStyle:true,boxWidth:8}},tooltip:{callbacks:{label:c=>c.dataset.label+": "+fmt(c.parsed.y)}}},
+    scales:{x:{ticks:{color:ink},grid:{color:line}},y:{beginAtZero:true,ticks:{color:ink,callback:v=>fmt(v)},grid:{color:line}}},
+    onClick:(e,els)=>{if(els.length){$("yr").value=els[0].index;render()}}});
+  if(!c1){
+    c1=new Chart($("c1"),{type:"line",data:{labels,datasets:d1},options:opts(gbp)});
+    c2=new Chart($("c2"),{type:"line",data:{labels,datasets:d2},options:opts(v=>gbp(v)+"/mo")});
+  }else{
+    c1.data={labels,datasets:d1};c1.options=opts(gbp);c1.update();
+    c2.data={labels,datasets:d2};c2.options=opts(v=>gbp(v)+"/mo");c2.update();
+  }
+  const r=rows[sel];
+  const val=hasCust?cust:r.maxVal;
+  const loan=hasCust?r.cLoan:r.maxLoan;
+  const pay=hasCust?r.cPay:r.maxPay;
+  const lti=r.inc>0?loan/r.inc:0;
+  const over=lti>n("mult")+1e-9;
+  const total=pay*n("term")*12;
+  const S=(v,l,w)=>`<div class="stat"><b${w?' class="warn"':""}>${v}</b><span>${l}</span></div>`;
+  $("stats").innerHTML=
+    S(gbp(val),hasCust?"Property value (fixed)":"Maximum property value")+
+    S(gbp(r.dep),"Deposit at Y"+sel)+
+    S(gbp(loan),"Mortgage")+
+    S(gbp(r.inc),"Income at Y"+sel)+
+    S(gbp(pay)+"/mo","Monthly repayment")+
+    S(r.inc>0?(pay*12/r.inc*100).toFixed(0)+"%":"-","Of gross income")+
+    S(gbp(Math.max(0,total-loan)),"Total interest over term")+
+    S(lti.toFixed(2)+"x"+(over?" over limit":""),"Loan to income",over)+
+    S(val>0?(loan/val*100).toFixed(0)+"%":"-","Loan to value");
+}
+document.querySelectorAll("input").forEach(el=>el.addEventListener("input",render));
+matchMedia("(prefers-color-scheme: dark)").addEventListener("change",()=>{if(c1){c1.destroy();c2.destroy();c1=c2=null;render()}});
+render();
+</script>
+</body>
+</html>
